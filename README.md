@@ -19,7 +19,7 @@ VITE_OPENAI_PROXY_URL=/api/openai/responses
 VITE_OPENAI_IMAGE_PROXY_URL=/api/openai/images
 ```
 
-UI gọi adapter trong `src/lib/openaiClient.ts`. Endpoint proxy local nằm ở `server/proxy.mjs`, đọc `OPENAI_API_KEY`, `OPENAI_API_URL`, `OPENAI_IMAGE_API_URL` và `OPENAI_IMAGE_MODEL` từ `.env`, rồi forward request lên API thật. Nếu không đặt `OPENAI_IMAGE_API_URL`, proxy sẽ tự đổi endpoint `/v1/responses` thành `/v1/images/generations`. Nếu không đặt `OPENAI_IMAGE_MODEL`, proxy sẽ dùng `gpt-image-2`.
+UI gọi adapter trong `src/lib/openaiClient.ts`. Endpoint proxy local nằm ở `server/proxy.mjs`, đọc `OPENAI_API_KEY`, `OPENAI_API_URL`, `OPENAI_IMAGE_API_URL`, `OPENAI_IMAGE_MODEL` và `OPENAI_IMAGE_FALLBACK_MODEL` từ `.env`, rồi forward request lên API thật. Nếu không đặt `OPENAI_IMAGE_API_URL`, proxy sẽ tự đổi endpoint `/v1/responses` thành `/v1/images/generations`. Nếu không đặt `OPENAI_IMAGE_MODEL`, proxy sẽ dùng `gpt-image-2`; nếu model này không khả dụng, proxy tự thử lại bằng `gpt-image-1.5`.
 
 Chạy frontend:
 

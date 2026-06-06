@@ -16,5 +16,7 @@ services:
         sync: false
       - key: OPENAI_IMAGE_MODEL
         value: gpt-image-2
+      - key: OPENAI_IMAGE_FALLBACK_MODEL
+        value: gpt-image-1.5
       - key: OPENAI_API_KEY
         sync: false

@@ -9,6 +9,7 @@ const port = Number(process.env.PORT || 3001);
 const apiUrl = cleanEnv(process.env.OPENAI_API_URL || 'https://api.openai.com/v1/responses');
 const imageApiUrl = cleanEnv(process.env.OPENAI_IMAGE_API_URL || deriveImageApiUrl(apiUrl));
 const imageModel = cleanEnv(process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2');
+const imageFallbackModel = cleanEnv(process.env.OPENAI_IMAGE_FALLBACK_MODEL || 'gpt-image-1.5');
 const apiKey = cleanEnv(process.env.OPENAI_API_KEY || '');
 const codexHome = resolve(
   cleanEnv(process.env.CODEX_HOME || process.env.USERPROFILE || process.env.HOME || '.'),
@@ -98,6 +99,9 @@ const server = http.createServer(async (req, res) => {
 server.listen(port, host, () => {
   console.log(`OpenAI proxy running at http://${host}:${port}/api/openai/responses`);
   console.log(`OpenAI image proxy running at http://${host}:${port}/api/openai/images`);
+  if (imageFallbackModel && imageFallbackModel !== imageModel) {
+    console.log(`OpenAI image fallback model: ${imageFallbackModel}`);
+  }
 });
 
 function loadEnv(path) {
@@ -176,30 +180,89 @@ async function sendGeneratedImage(req, res) {
       return;
     }
 
-    const upstream = await fetch(imageApiUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: imageModel,
-        prompt,
-        size: typeof payload.size === 'string' ? payload.size : '1024x1024',
-        n: 1,
-      }),
-    });
+    const imageRequest = {
+      prompt,
+      size: typeof payload.size === 'string' ? payload.size : '1024x1024',
+      n: 1,
+    };
+    const primary = await requestGeneratedImage({ ...imageRequest, model: imageModel });
 
-    const text = await upstream.text();
-    res.writeHead(upstream.status, {
-      'Content-Type': upstream.headers.get('content-type') || 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    });
-    res.end(text);
+    if (
+      !primary.ok &&
+      imageFallbackModel &&
+      imageFallbackModel !== imageModel &&
+      shouldRetryImageModel(primary.status, primary.text)
+    ) {
+      const fallback = await requestGeneratedImage({ ...imageRequest, model: imageFallbackModel });
+      sendImageUpstreamResponse(res, fallback, imageFallbackModel, imageModel);
+      return;
+    }
+
+    sendImageUpstreamResponse(res, primary, imageModel);
   } catch (error) {
     sendJson(res, 500, {
       error: error instanceof Error ? error.message : 'Unknown image proxy error',
     });
+  }
+}
+
+async function requestGeneratedImage(payload) {
+  const upstream = await fetch(imageApiUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return {
+    ok: upstream.ok,
+    status: upstream.status,
+    contentType: upstream.headers.get('content-type') || 'application/json',
+    text: await upstream.text(),
+  };
+}
+
+function shouldRetryImageModel(status, text) {
+  const normalized = text.toLowerCase();
+  const modelUnavailable =
+    /gpt-image-2|model.*(not.*available|unavailable|unsupported|does not exist|not found|access|invalid)|not.*available.*model|unsupported.*model|invalid.*model/.test(
+      normalized,
+    );
+  const transientModelIssue =
+    /rate limit|overloaded|temporarily|timeout|try again/.test(normalized) &&
+    /model|gpt-image-2|image/.test(normalized);
+
+  return (
+    ([400, 403, 404].includes(status) && modelUnavailable) ||
+    ([429, 500, 502, 503, 504].includes(status) && (modelUnavailable || transientModelIssue))
+  );
+}
+
+function sendImageUpstreamResponse(res, upstream, model, fallbackFrom) {
+  const text = withImageModelMetadata(upstream.text, model, fallbackFrom);
+  res.writeHead(upstream.status, {
+    'Content-Type': upstream.contentType,
+    'Access-Control-Allow-Origin': '*',
+  });
+  res.end(text);
+}
+
+function withImageModelMetadata(text, model, fallbackFrom) {
+  try {
+    const payload = JSON.parse(text || '{}');
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return text;
+    }
+
+    return JSON.stringify({
+      ...payload,
+      model: typeof payload.model === 'string' && payload.model.trim() ? payload.model : model,
+      ...(fallbackFrom ? { fallback_from: fallbackFrom } : {}),
+    });
+  } catch {
+    return text;
   }
 }
 
