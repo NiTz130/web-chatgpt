@@ -12,7 +12,10 @@ const codexHome = resolve(
   cleanEnv(process.env.CODEX_HOME || process.env.USERPROFILE || process.env.HOME || '.'),
   process.env.CODEX_HOME ? '' : '.codex',
 );
-const skillsRoot = resolve(cleanEnv(process.env.CODEX_SKILLS_DIR || resolve(codexHome, 'skills')));
+const bundledSkillsRoot = resolve(process.cwd(), 'server', 'skills');
+const skillsRoot = resolve(
+  cleanEnv(process.env.CODEX_SKILLS_DIR || (existsSync(bundledSkillsRoot) ? bundledSkillsRoot : resolve(codexHome, 'skills'))),
+);
 const maxSkillChars = Number(process.env.MAX_SKILL_CHARS || 50000);
 const maxRequestBodyBytes = Number(process.env.MAX_REQUEST_BODY_BYTES || 25_000_000);
 const host = cleanEnv(process.env.HOST || '0.0.0.0');
