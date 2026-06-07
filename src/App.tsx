@@ -86,11 +86,17 @@ type DemoAccount = {
 
 type ComposerMode = 'chat' | 'image';
 
+type StoredAuthSession = {
+  username: string;
+  expiresAt: number;
+};
+
 const demoAccounts: DemoAccount[] = [
   { username: 'cholo', password: 'cholo040312', displayName: 'cholo' },
   { username: 'xoisuon', password: 'thaonguyen1002', displayName: 'xoisuon' },
 ];
 const authStorageKey = 'web-chatgpt-active-user';
+const authSessionDurationMs = 24 * 60 * 60 * 1000;
 
 const initialMessages: Message[] = [
   {
@@ -123,11 +129,45 @@ function toSkillCommand(skillId: string) {
   return `$${skillId}`;
 }
 
+function readStoredAuthSession(): StoredAuthSession | null {
+  if (typeof window === 'undefined') return null;
+
+  const rawValue = window.localStorage.getItem(authStorageKey);
+  if (!rawValue) return null;
+
+  try {
+    const parsed = JSON.parse(rawValue) as Partial<StoredAuthSession>;
+    if (typeof parsed.username !== 'string' || typeof parsed.expiresAt !== 'number') {
+      throw new Error('Invalid auth session');
+    }
+
+    if (parsed.expiresAt <= Date.now()) {
+      window.localStorage.removeItem(authStorageKey);
+      return null;
+    }
+
+    return {
+      username: parsed.username,
+      expiresAt: parsed.expiresAt,
+    };
+  } catch {
+    window.localStorage.removeItem(authStorageKey);
+    return null;
+  }
+}
+
+function writeStoredAuthSession(username: string) {
+  const session: StoredAuthSession = {
+    username,
+    expiresAt: Date.now() + authSessionDurationMs,
+  };
+  window.localStorage.setItem(authStorageKey, JSON.stringify(session));
+}
+
 function App() {
   const [activeUser, setActiveUser] = useState<DemoAccount | null>(() => {
-    if (typeof window === 'undefined') return null;
-    const username = window.localStorage.getItem(authStorageKey);
-    return demoAccounts.find((account) => account.username === username) ?? null;
+    const session = readStoredAuthSession();
+    return demoAccounts.find((account) => account.username === session?.username) ?? null;
   });
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [prompt, setPrompt] = useState('');
@@ -225,7 +265,7 @@ function App() {
       (item) => item.username === username.trim() && item.password === password,
     );
     if (!account) return false;
-    window.localStorage.setItem(authStorageKey, account.username);
+    writeStoredAuthSession(account.username);
     setActiveUser(account);
     return true;
   }
@@ -241,6 +281,22 @@ function App() {
     setAttachmentNotice('');
     setSettingsOpen(false);
   }
+
+  useEffect(() => {
+    if (!activeUser) return undefined;
+
+    const session = readStoredAuthSession();
+    if (!session || session.username !== activeUser.username) {
+      handleLogout();
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      handleLogout();
+    }, Math.max(session.expiresAt - Date.now(), 0));
+
+    return () => window.clearTimeout(timeout);
+  }, [activeUser]);
 
   useEffect(() => {
     let cancelled = false;
