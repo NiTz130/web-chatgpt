@@ -103,7 +103,7 @@ export function createPdfArtifact(content: string, filename = 'cau-tra-loi.pdf')
 export function createImageArtifact({
   dataUrl,
   prompt,
-  filename = 'anh-tao-boi-ai.png',
+  filename = imageFilenameFromPrompt(prompt),
 }: {
   dataUrl: string;
   prompt: string;
@@ -117,6 +117,21 @@ export function createImageArtifact({
     mimeType: dataUrl.match(/^data:([^;]+);base64,/)?.[1] || 'image/png',
     prompt,
   };
+}
+
+function imageFilenameFromPrompt(prompt: string) {
+  const slug = prompt
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u0111/g, 'd')
+    .replace(/\u0110/g, 'D')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 72)
+    .replace(/-+$/g, '');
+
+  return `${slug || 'anh-tao-boi-ai'}.png`;
 }
 
 export function downloadTextArtifact(artifact: MessageArtifact) {
