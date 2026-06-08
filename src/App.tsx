@@ -22,6 +22,7 @@ import {
   X,
   LogOut,
   LockKeyhole,
+  Eye,
 } from 'lucide-react';
 import remarkGfm from 'remark-gfm';
 import { defaultModelId, modelOptions } from './data/models';
@@ -82,6 +83,11 @@ type DemoAccount = {
   username: string;
   password: string;
   displayName: string;
+};
+
+type GuestSession = {
+  username: 'demo';
+  displayName: 'Demo';
 };
 
 type ComposerMode = 'chat' | 'image';
@@ -165,10 +171,11 @@ function writeStoredAuthSession(username: string) {
 }
 
 function App() {
-  const [activeUser, setActiveUser] = useState<DemoAccount | null>(() => {
+  const [activeUser, setActiveUser] = useState<DemoAccount | GuestSession | null>(() => {
     const session = readStoredAuthSession();
     return demoAccounts.find((account) => account.username === session?.username) ?? null;
   });
+  const isDemoMode = activeUser?.username === 'demo';
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [prompt, setPrompt] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -252,7 +259,8 @@ function App() {
   const canSubmit =
     (composerMode === 'image' ? Boolean(prompt.trim()) : Boolean(prompt.trim() || readyAttachments.length)) &&
     !isSending &&
-    !hasPendingAttachments;
+    !hasPendingAttachments &&
+    !isDemoMode;
   const browserSupportsSpeechRecognition =
     typeof window !== 'undefined' &&
     Boolean(
@@ -270,6 +278,19 @@ function App() {
     return true;
   }
 
+  function handleDemoPreview() {
+    window.localStorage.removeItem(authStorageKey);
+    recognitionRef.current?.stop();
+    setIsListening(false);
+    setActiveUser({ username: 'demo', displayName: 'Demo' });
+    setMessages(initialMessages);
+    setPrompt('');
+    setAttachments([]);
+    setAttachmentNotice('');
+    setSettingsOpen(false);
+    setComposerMode('chat');
+  }
+
   function handleLogout() {
     window.localStorage.removeItem(authStorageKey);
     recognitionRef.current?.stop();
@@ -284,6 +305,7 @@ function App() {
 
   useEffect(() => {
     if (!activeUser) return undefined;
+    if (isDemoMode) return undefined;
 
     const session = readStoredAuthSession();
     if (!session || session.username !== activeUser.username) {
@@ -296,7 +318,7 @@ function App() {
     }, Math.max(session.expiresAt - Date.now(), 0));
 
     return () => window.clearTimeout(timeout);
-  }, [activeUser]);
+  }, [activeUser, isDemoMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -312,15 +334,23 @@ function App() {
   }, [activeTask.skillId, activeTask.skillLabel]);
 
   function updateSettings(patch: Partial<AssistantSettings>) {
+    if (isDemoMode) {
+      setAttachmentNotice('Chế độ demo chỉ cho tham quan giao diện. Hãy đăng nhập để dùng chức năng này.');
+      return;
+    }
     setSettings((current) => ({ ...current, ...patch }));
   }
 
   function selectTask(task: TaskTemplate) {
-    updateSettings({ taskId: task.id });
+    setSettings((current) => ({ ...current, taskId: task.id }));
     window.setTimeout(() => composerRef.current?.focus(), 0);
   }
 
   async function addFiles(files: FileList | null, kind: MessageAttachment['kind']) {
+    if (isDemoMode) {
+      setAttachmentNotice('Chế độ demo không đọc tệp. Hãy đăng nhập để dùng chức năng này.');
+      return;
+    }
     const selectedFiles = Array.from(files ?? []);
     if (!selectedFiles.length) return;
 
@@ -359,10 +389,15 @@ function App() {
   }
 
   function removeAttachment(attachmentId: string) {
+    if (isDemoMode) return;
     setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
   }
 
   function toggleSpeechInput() {
+    if (isDemoMode) {
+      setAttachmentNotice('Chế độ demo không dùng microphone. Hãy đăng nhập để dùng chức năng này.');
+      return;
+    }
     if (isListening) {
       recognitionRef.current?.stop();
       setIsListening(false);
@@ -406,6 +441,10 @@ function App() {
 
   async function submitPrompt() {
     const trimmedPrompt = prompt.trim();
+    if (isDemoMode) {
+      setAttachmentNotice('Chế độ demo không gửi nội dung. Hãy đăng nhập để dùng chức năng này.');
+      return;
+    }
     if (!canSubmit) return;
 
     const currentAttachments = readyAttachments;
@@ -520,6 +559,7 @@ function App() {
   }
 
   async function copyLastAnswer() {
+    if (isDemoMode) return;
     if (!lastAssistant) return;
     await navigator.clipboard.writeText(lastAssistant.content);
     setIsCopied(true);
@@ -527,6 +567,7 @@ function App() {
   }
 
   async function downloadArtifact(artifact: MessageArtifact) {
+    if (isDemoMode) return;
     if (artifact.kind === 'image') {
       await downloadImageArtifact(artifact);
       return;
@@ -548,21 +589,28 @@ function App() {
   }
 
   async function downloadLastAnswerAsTxt() {
+    if (isDemoMode) return;
     if (!lastAssistant) return;
     await downloadArtifact(createTextArtifact(lastAssistant.content));
   }
 
   async function downloadLastAnswerAsDocx() {
+    if (isDemoMode) return;
     if (!lastAssistant) return;
     await downloadArtifact(createDocxArtifact(lastAssistant.content));
   }
 
   async function downloadLastAnswerAsPdf() {
+    if (isDemoMode) return;
     if (!lastAssistant) return;
     await downloadArtifact(createPdfArtifact(lastAssistant.content));
   }
 
   function newChat() {
+    if (isDemoMode) {
+      setAttachmentNotice('Chế độ demo không tạo phiên chat mới. Hãy đăng nhập để dùng chức năng này.');
+      return;
+    }
     setMessages(initialMessages);
     setPrompt('');
     setAttachments([]);
@@ -574,11 +622,11 @@ function App() {
   }
 
   if (!activeUser) {
-    return <LoginPage onLogin={handleLogin} />;
+    return <LoginPage onLogin={handleLogin} onDemoPreview={handleDemoPreview} />;
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${isDemoMode ? 'is-demo-mode' : ''}`}>
       <main className="workspace">
         <header className="topbar">
           <div className="brand-row">
@@ -596,12 +644,21 @@ function App() {
               <span>{activeUser.displayName.slice(0, 1).toUpperCase()}</span>
               <strong>{activeUser.displayName}</strong>
             </div>
-            <button className="toolbar-button" type="button" onClick={newChat}>
+            <button className="toolbar-button" type="button" disabled={isDemoMode} onClick={newChat}>
               <Plus size={17} />
               <span className="toolbar-label">Chat mới</span>
             </button>
-            <ModelSelect value={settings.model} onChange={(model) => updateSettings({ model })} />
-            <button className="toolbar-button" type="button" onClick={() => setSettingsOpen(true)}>
+            <ModelSelect
+              value={settings.model}
+              disabled={isDemoMode}
+              onChange={(model) => updateSettings({ model })}
+            />
+            <button
+              className="toolbar-button"
+              type="button"
+              disabled={isDemoMode}
+              onClick={() => setSettingsOpen(true)}
+            >
               <Settings size={17} />
               <span className="toolbar-label">Thiết lập</span>
             </button>
@@ -619,6 +676,16 @@ function App() {
             </button>
           </div>
         </header>
+
+        {isDemoMode && (
+          <div className="demo-banner" role="status">
+            <Eye size={17} />
+            <div>
+              <strong>Đang xem demo</strong>
+              <span>Chỉ tham quan giao diện. Đăng nhập để gửi chat, tải tệp, dùng microphone hoặc tải kết quả.</span>
+            </div>
+          </div>
+        )}
 
         <section className="hero-workbench" aria-labelledby="active-task-title">
           <div className="task-focus">
@@ -666,6 +733,7 @@ function App() {
                     className={settings.tone === tone ? 'is-selected' : ''}
                     key={tone}
                     type="button"
+                    disabled={isDemoMode}
                     onClick={() => updateSettings({ tone })}
                   >
                     {tone}
@@ -678,6 +746,7 @@ function App() {
                   Độ dài
                   <select
                     value={settings.outputLength}
+                    disabled={isDemoMode}
                     onChange={(event) => updateSettings({ outputLength: event.target.value })}
                   >
                     {lengthOptions.map((option) => (
@@ -690,12 +759,14 @@ function App() {
                   checked={settings.useWeb}
                   label="Tìm web"
                   hint="Sẽ dùng khi backend hỗ trợ"
+                  disabled={isDemoMode}
                   onChange={(checked) => updateSettings({ useWeb: checked })}
                 />
                 <Toggle
                   checked={settings.citations}
                   label="Trích dẫn"
                   hint="Nguồn sẽ hiện trong câu trả lời khi API hỗ trợ"
+                  disabled={isDemoMode}
                   onChange={(checked) => updateSettings({ citations: checked })}
                 />
               </div>
@@ -757,6 +828,7 @@ function App() {
                       <button
                         key={example}
                         type="button"
+                        disabled={isDemoMode}
                         onClick={() => {
                           setPrompt(example);
                           window.setTimeout(() => composerRef.current?.focus(), 0);
@@ -849,6 +921,7 @@ function App() {
                 type="file"
                 multiple
                 accept={documentAccept}
+                disabled={isDemoMode}
                 onChange={(event) => {
                   const { files } = event.currentTarget;
                   void addFiles(files, 'document');
@@ -861,6 +934,7 @@ function App() {
                 type="file"
                 multiple
                 accept="image/*"
+                disabled={isDemoMode}
                 onChange={(event) => {
                   const { files } = event.currentTarget;
                   void addFiles(files, 'image');
@@ -872,6 +946,7 @@ function App() {
                   className={composerMode === 'chat' ? 'is-selected' : ''}
                   type="button"
                   aria-pressed={composerMode === 'chat'}
+                  disabled={isDemoMode}
                   onClick={() => setComposerMode('chat')}
                 >
                   <MessageSquareText size={16} />
@@ -881,6 +956,7 @@ function App() {
                   className={composerMode === 'image' ? 'is-selected' : ''}
                   type="button"
                   aria-pressed={composerMode === 'image'}
+                  disabled={isDemoMode}
                   onClick={() => {
                     setComposerMode('image');
                     setAttachmentNotice('');
@@ -895,6 +971,7 @@ function App() {
               <textarea
                 ref={composerRef}
                 value={prompt}
+                disabled={isDemoMode}
                 onChange={(event) => setPrompt(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -918,6 +995,7 @@ function App() {
                     type="button"
                     title="Thêm tệp"
                     aria-label="Thêm tệp"
+                    disabled={isDemoMode}
                     onClick={() => documentInputRef.current?.click()}
                   >
                     <FileUp size={17} />
@@ -927,6 +1005,7 @@ function App() {
                     type="button"
                     title="Thêm ảnh"
                     aria-label="Thêm ảnh"
+                    disabled={isDemoMode}
                     onClick={() => imageInputRef.current?.click()}
                   >
                     <Image size={17} />
@@ -938,6 +1017,7 @@ function App() {
                     title={isListening ? 'Dừng ghi âm' : 'Nhập bằng giọng nói'}
                     aria-label={isListening ? 'Dừng ghi âm' : 'Nhập bằng giọng nói'}
                     aria-pressed={isListening}
+                    disabled={isDemoMode}
                     onClick={toggleSpeechInput}
                   >
                     <Mic size={17} />
@@ -1018,7 +1098,13 @@ function App() {
   );
 }
 
-function LoginPage({ onLogin }: { onLogin: (username: string, password: string) => boolean }) {
+function LoginPage({
+  onLogin,
+  onDemoPreview,
+}: {
+  onLogin: (username: string, password: string) => boolean;
+  onDemoPreview: () => void;
+}) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -1101,6 +1187,11 @@ function LoginPage({ onLogin }: { onLogin: (username: string, password: string) 
           </button>
         </form>
 
+        <button className="login-demo-button" type="button" onClick={onDemoPreview}>
+          <Eye size={17} />
+          Xem demo trang web
+        </button>
+
       </section>
     </main>
   );
@@ -1108,9 +1199,11 @@ function LoginPage({ onLogin }: { onLogin: (username: string, password: string) 
 
 function ModelSelect({
   value,
+  disabled = false,
   onChange,
 }: {
   value: string;
+  disabled?: boolean;
   onChange: (model: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -1146,6 +1239,7 @@ function ModelSelect({
         type="button"
         aria-expanded={open}
         aria-haspopup="listbox"
+        disabled={disabled}
         onClick={() => setOpen((current) => !current)}
       >
         <Bot size={17} />
@@ -1183,16 +1277,23 @@ function Toggle({
   checked,
   label,
   hint,
+  disabled = false,
   onChange,
 }: {
   checked: boolean;
   label: string;
   hint?: string;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
     <label className="toggle">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
       <span className="toggle-control" aria-hidden="true" />
       <span className="toggle-text">
         {label}
