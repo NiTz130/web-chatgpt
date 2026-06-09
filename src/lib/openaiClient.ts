@@ -7,6 +7,7 @@ export type AssistantRequest = {
   settings: AssistantSettings;
   taskInstruction: string;
   userKey?: string;
+  signal?: AbortSignal;
 };
 
 export type AssistantResponse = {
@@ -16,6 +17,7 @@ export type AssistantResponse = {
 
 export type ImageGenerationRequest = {
   prompt: string;
+  signal?: AbortSignal;
 };
 
 export type ImageGenerationResponse = {
@@ -51,6 +53,7 @@ export async function sendAssistantRequest(request: AssistantRequest): Promise<A
     headers: {
       'Content-Type': 'application/json',
     },
+    signal: request.signal,
     body: JSON.stringify(toResponsesPayload(request)),
   });
 
@@ -79,7 +82,8 @@ export async function generateImageRequest(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(request),
+    signal: request.signal,
+    body: JSON.stringify({ prompt: request.prompt }),
   });
 
   if (!response.ok) {
@@ -439,7 +443,7 @@ function getHostname(url: string) {
 }
 
 async function mockAssistantResponse(request: AssistantRequest): Promise<AssistantResponse> {
-  await new Promise((resolve) => window.setTimeout(resolve, 650));
+  await delay(650, request.signal);
 
   const latest = request.prompt.trim();
   const taskName =
@@ -484,7 +488,7 @@ async function mockAssistantResponse(request: AssistantRequest): Promise<Assista
 async function mockImageGenerationResponse(
   request: ImageGenerationRequest,
 ): Promise<ImageGenerationResponse> {
-  await new Promise((resolve) => window.setTimeout(resolve, 900));
+  await delay(900, request.signal);
 
   const svg = [
     '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">',
@@ -536,4 +540,24 @@ function findPriorFileContext(messages: Message[]) {
   }
 
   return undefined;
+}
+
+function delay(ms: number, signal?: AbortSignal) {
+  if (signal?.aborted) {
+    return Promise.reject(new DOMException('Aborted', 'AbortError'));
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      signal?.removeEventListener('abort', handleAbort);
+      resolve();
+    }, ms);
+
+    function handleAbort() {
+      window.clearTimeout(timeout);
+      reject(new DOMException('Aborted', 'AbortError'));
+    }
+
+    signal?.addEventListener('abort', handleAbort, { once: true });
+  });
 }

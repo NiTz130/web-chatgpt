@@ -977,6 +977,25 @@ textarea:focus-visible {
   font-weight: 800;
 }
 
+.message-inline-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  margin-left: 2px;
+  padding: 0 7px;
+  border: 1px solid hsl(0 0% 100% / 0.34);
+  border-radius: 999px;
+  color: white;
+  background: hsl(0 0% 100% / 0.14);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.message-inline-action:hover {
+  background: hsl(0 0% 100% / 0.22);
+}
+
 .markdown-message {
   overflow-wrap: anywhere;
 }
@@ -1195,6 +1214,30 @@ textarea:focus-visible {
   color: var(--muted);
   font-size: 0.74rem;
   font-weight: 650;
+}
+
+.composer-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cancel-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid hsl(8 70% 78%);
+  border-radius: var(--radius-md);
+  color: hsl(8 68% 34%);
+  background: hsl(8 88% 96%);
+  font-weight: 850;
+}
+
+.cancel-button:hover {
+  background: hsl(8 88% 92%);
 }
 
 .send-button {
@@ -1835,6 +1878,14 @@ textarea:focus-visible {
 
   .send-button {
     width: 100%;
+  }
+
+  .composer-submit {
+    width: 100%;
+  }
+
+  .cancel-button {
+    flex: 0 0 auto;
   }
 
   .drawer-backdrop {

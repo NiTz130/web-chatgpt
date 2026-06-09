@@ -13,10 +13,12 @@ import {
   Mic,
   PanelRightClose,
   PanelRightOpen,
+  Pencil,
   Plus,
   Send,
   Settings,
   Sparkles,
+  Square,
   Target,
   WandSparkles,
   X,
@@ -206,6 +208,7 @@ function App() {
   const documentInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const activeRequestRef = useRef<AbortController | null>(null);
 
   const activeTask = useMemo(
     () => taskTemplates.find((task) => task.id === settings.taskId) ?? taskTemplates[0],
@@ -259,6 +262,8 @@ function App() {
     lastAssistant?.artifacts?.some((artifact) => artifact.kind === 'image'),
   );
   const visibleMessages = messages.filter((message) => message.id !== 'welcome');
+  const editableUserMessageId =
+    [...visibleMessages].reverse().find((message) => message.role === 'user')?.id ?? null;
   const hasConversation = visibleMessages.length > 0;
   const readyAttachments = attachments.filter((attachment) => attachment.status === 'ready');
   const hasPendingAttachments = attachments.some((attachment) => attachment.status === 'processing');
@@ -445,6 +450,23 @@ function App() {
     setIsListening(true);
   }
 
+  function cancelCurrentRequest() {
+    activeRequestRef.current?.abort();
+  }
+
+  function editUserMessage(message: Message) {
+    if (isSending || isDemoMode || message.role !== 'user') return;
+
+    setPrompt(message.content);
+    setAttachments(message.attachments ?? []);
+    setAttachmentNotice('Đã đưa câu lệnh về ô nhập để chỉnh sửa. Tin trả lời sau câu này đã được xoá.');
+    setMessages((current) => {
+      const messageIndex = current.findIndex((item) => item.id === message.id);
+      return messageIndex >= 0 ? current.slice(0, messageIndex) : current;
+    });
+    window.setTimeout(() => composerRef.current?.focus(), 0);
+  }
+
   async function submitPrompt() {
     const trimmedPrompt = prompt.trim();
     if (isDemoMode) {
@@ -472,7 +494,10 @@ function App() {
       attachments: currentAttachments,
     };
 
+    const requestController = new AbortController();
+    activeRequestRef.current = requestController;
     setIsSending(true);
+    setAttachmentNotice('');
     setMessages((current) => [...current, userMessage]);
 
     try {
@@ -480,7 +505,10 @@ function App() {
       setAttachments([]);
 
       if (composerMode === 'image') {
-        const response = await generateImageRequest({ prompt: trimmedPrompt });
+        const response = await generateImageRequest({
+          prompt: trimmedPrompt,
+          signal: requestController.signal,
+        });
         const imageArtifact = createImageArtifact({
           dataUrl: response.imageUrl,
           prompt: trimmedPrompt,
@@ -508,6 +536,7 @@ function App() {
         settings,
         taskInstruction: buildAssistantTaskInstruction(activeTask, skillForRequest),
         userKey: activeUser?.username ?? undefined,
+        signal: requestController.signal,
       });
       const requestedArtifacts = [
         createDocxArtifactFromRequest(trimmedPrompt, response.text, currentAttachments),
@@ -532,6 +561,14 @@ function App() {
         },
       ]);
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setMessages((current) => current.filter((message) => message.id !== userMessage.id));
+        setPrompt(trimmedPrompt);
+        setAttachments(currentAttachments);
+        setAttachmentNotice('Đã hủy câu lệnh vừa gửi.');
+        return;
+      }
+
       setMessages((current) => [
         ...current,
         {
@@ -548,6 +585,9 @@ function App() {
       setPrompt(trimmedPrompt);
       setAttachments(currentAttachments);
     } finally {
+      if (activeRequestRef.current === requestController) {
+        activeRequestRef.current = null;
+      }
       setIsSending(false);
     }
   }
@@ -885,6 +925,16 @@ function App() {
                       ) : (
                         <span>{message.meta}</span>
                       )}
+                      {message.role === 'user' && message.id === editableUserMessageId && !isSending && !isDemoMode && (
+                        <button
+                          className="message-inline-action"
+                          type="button"
+                          onClick={() => editUserMessage(message)}
+                        >
+                          <Pencil size={13} />
+                          Chỉnh sửa
+                        </button>
+                      )}
                     </div>
                     {message.content && <MarkdownMessage content={message.content} />}
                     {message.attachments && message.attachments.length > 0 && (
@@ -1058,10 +1108,18 @@ function App() {
                     {attachments.length > 0 ? ` · ${attachments.length} tệp` : ''}
                   </span>
                 </div>
-                <button className="send-button" type="submit" disabled={!canSubmit}>
-                  <Send size={17} />
-                  Gửi
-                </button>
+                <div className="composer-submit">
+                  {isSending && (
+                    <button className="cancel-button" type="button" onClick={cancelCurrentRequest}>
+                      <Square size={15} />
+                      Hủy
+                    </button>
+                  )}
+                  <button className="send-button" type="submit" disabled={!canSubmit}>
+                    <Send size={17} />
+                    Gửi
+                  </button>
+                </div>
               </div>
             </form>
           </section>
