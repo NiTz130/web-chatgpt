@@ -8,13 +8,16 @@
 [![Node](https://img.shields.io/badge/Node-18%2B-339933.svg?logo=node.js)](https://nodejs.org)
 [![OpenAI](https://img.shields.io/badge/AI-OpenAI%20Responses%20%2B%20Images-412991.svg?logo=openai)](https://openai.com)
 [![Deploy: Vercel + Render](https://img.shields.io/badge/Deploy-Vercel%20%7C%20Render-black.svg)](#-triển-khai-production)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20Site-blue.svg?logo=vercel)](https://web-chatgpt-theta.vercel.app/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
 
 ## 📸 Demo
 
-> Thêm screenshot vào `docs/screenshots/` rồi cập nhật link bên dưới.
+> 🌐 **Live**: [**web-chatgpt-theta.vercel.app**](https://web-chatgpt-theta.vercel.app/) — chạy trực tiếp trên Vercel.
+
+Thêm screenshot vào `docs/screenshots/` rồi cập nhật link bên dưới:
 
 ```markdown
 ![Chat](docs/screenshots/chat.png)
@@ -22,7 +25,7 @@
 ![Export](docs/screenshots/export.png)
 ```
 
-🌐 **Live demo**: chạy `npm run dev` → mở `http://localhost:5173` (hoạt động ngay với mock responses).
+💻 **Chạy local**: `npm run dev` → mở `http://localhost:5173` (hoạt động ngay với mock responses).
 
 ---
 
