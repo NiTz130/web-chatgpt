@@ -17,13 +17,9 @@
 
 > 🌐 **Live**: [**web-chatgpt-theta.vercel.app**](https://web-chatgpt-theta.vercel.app/) — chạy trực tiếp trên Vercel.
 
-Thêm screenshot vào `docs/screenshots/` rồi cập nhật link bên dưới:
+![Giao diện chính — Trợ lý OpenAI với skill selector, task templates và chat input](docs/screenshots/main.png)
 
-```markdown
-![Chat](docs/screenshots/chat.png)
-![Skills](docs/screenshots/skills.png)
-![Export](docs/screenshots/export.png)
-```
+*Giao diện chính: skill selector, task templates phổ biến, demo banner, chat input với GPT-5.5.*
 
 💻 **Chạy local**: `npm run dev` → mở `http://localhost:5173` (hoạt động ngay với mock responses).
 
